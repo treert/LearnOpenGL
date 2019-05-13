@@ -53,9 +53,17 @@ int main()
     // ------------------------------------------------------------------
     float vertices[] = {
         // positions         // colors
-         0.5f, -0.5f, 0.0f,  1.0f, 0.0f, 0.0f,  // bottom right
+         1.0f, -0.5f, 1.0f,  0.0f, 1.0f, 0.0f,  // bottom right
         -0.5f, -0.5f, 0.0f,  0.0f, 1.0f, 0.0f,  // bottom left
-         0.0f,  0.5f, 0.0f,  0.0f, 0.0f, 1.0f   // top 
+         -0.5f,  0.5f, 0.0f,  0.0f, 1.0f, 0.0f, // top left
+
+
+         -1.0f, -0.5f, 1.0f,  1.0f, 0.0f, 0.0f,  // bottom left
+         0.5f, -0.5f, 0.0f,  1.0f, 0.0f, 0.0f,  // bottom right
+         0.5f,  0.5f, 0.0f,  1.0f, 0.0f, 0.0f,   // top right
+        
+         
+
     };
 
     unsigned int VBO, VAO;
@@ -77,8 +85,9 @@ int main()
     // You can unbind the VAO afterwards so other VAO calls won't accidentally modify this VAO, but this rarely happens. Modifying other
     // VAOs requires a call to glBindVertexArray anyways so we generally don't unbind VAOs (nor VBOs) when it's not directly necessary.
     // glBindVertexArray(0);
-
-
+    glEnable(GL_DEPTH_TEST);
+    glEnable(GL_BLEND);
+    glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
     // render loop
     // -----------
     while (!glfwWindowShouldClose(window))
@@ -90,12 +99,12 @@ int main()
         // render
         // ------
         glClearColor(0.2f, 0.3f, 0.3f, 1.0f);
-        glClear(GL_COLOR_BUFFER_BIT);
+        glClear(GL_COLOR_BUFFER_BIT| GL_DEPTH_BUFFER_BIT);
 
         // render the triangle
         ourShader.use();
         glBindVertexArray(VAO);
-        glDrawArrays(GL_TRIANGLES, 0, 3);
+        glDrawArrays(GL_TRIANGLES, 0, 6);
 
         // glfw: swap buffers and poll IO events (keys pressed/released, mouse moved etc.)
         // -------------------------------------------------------------------------------
