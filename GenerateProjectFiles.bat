@@ -2,6 +2,6 @@
 if not exist build ( md build )
 
 cd build
-cmake ..
+cmake -A Win32 ..
 
 pause
