@@ -60,7 +60,8 @@ int main()
     glfwSetScrollCallback(window, scroll_callback);
 
     // tell GLFW to capture our mouse
-    glfwSetInputMode(window, GLFW_CURSOR, GLFW_CURSOR_DISABLED);
+    //glfwSetInputMode(window, GLFW_CURSOR, GLFW_CURSOR_DISABLED);
+    glfwSetInputMode(window, GLFW_CURSOR, GLFW_CURSOR_NORMAL);
 
     // glad: load all OpenGL function pointers
     // ---------------------------------------
@@ -150,6 +151,25 @@ int main()
         glBindVertexArray(0);
     }
 
+    int Group = 8;
+    int index = 0;
+    auto UpdatePos = [=, &index] {
+        glm::mat4 rot = glm::rotate(glm::mat4(1), 0.002f, glm::vec3(0, 1, 0));
+        int nums_per_group = amount/ Group;
+        int start = nums_per_group * index;
+        int end = std::min((int)amount, start+ nums_per_group);
+        for (unsigned int i = start; i < end; i++)
+        {
+            glm::mat4 model = modelMatrices[i];
+            modelMatrices[i] = rot * model;
+        }
+        glBindBuffer(GL_ARRAY_BUFFER, buffer);
+
+        glBufferSubData(GL_ARRAY_BUFFER, sizeof(glm::mat4) * start, (end - start) * sizeof(glm::mat4), &modelMatrices[start]);
+        glBindBuffer(GL_ARRAY_BUFFER, 0);
+        index = (index+1)%Group;
+    };
+
     // render loop
     // -----------
     while (!glfwWindowShouldClose(window))
@@ -159,6 +179,8 @@ int main()
         float currentFrame = glfwGetTime();
         deltaTime = currentFrame - lastFrame;
         lastFrame = currentFrame;
+
+        UpdatePos();
 
         // input
         // -----
