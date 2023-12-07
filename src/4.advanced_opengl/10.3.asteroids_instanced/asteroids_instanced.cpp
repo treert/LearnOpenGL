@@ -15,6 +15,7 @@
 
 void framebuffer_size_callback(GLFWwindow* window, int width, int height);
 void mouse_callback(GLFWwindow* window, double xpos, double ypos);
+void mouse_button_callback(GLFWwindow* window, int button, int action, int mods);
 void scroll_callback(GLFWwindow* window, double xoffset, double yoffset);
 void processInput(GLFWwindow *window);
 
@@ -23,7 +24,8 @@ const unsigned int SCR_WIDTH = 1280;
 const unsigned int SCR_HEIGHT = 720;
 
 // camera
-Camera camera(glm::vec3(0.0f, 0.0f, 155.0f));
+//Camera camera(glm::vec3(0.0f, 0.0f, 155.0f));
+Camera camera(glm::vec3(-275.0f, 165.0f, 200.0f));
 float lastX = (float)SCR_WIDTH / 2.0;
 float lastY = (float)SCR_HEIGHT / 2.0;
 bool firstMouse = true;
@@ -58,6 +60,7 @@ int main()
     glfwSetFramebufferSizeCallback(window, framebuffer_size_callback);
     glfwSetCursorPosCallback(window, mouse_callback);
     glfwSetScrollCallback(window, scroll_callback);
+    glfwSetMouseButtonCallback(window, mouse_button_callback);
 
     // tell GLFW to capture our mouse
     //glfwSetInputMode(window, GLFW_CURSOR, GLFW_CURSOR_DISABLED);
@@ -88,13 +91,18 @@ int main()
     // generate a large list of semi-random model transformation matrices
     // ------------------------------------------------------------------
     unsigned int amount = 100000;
+    int Group = 8;
+    int nums_per_group = amount / Group;
     glm::mat4* modelMatrices;
     modelMatrices = new glm::mat4[amount];
     srand(glfwGetTime()); // initialize random seed	
-    float radius = 150.0;
-    float offset = 25.0f;
+    float Radius = 150.0;
+    float offset = 4.0f;
+    float gap_size = 15.f;
     for (unsigned int i = 0; i < amount; i++)
     {
+        int index = i / nums_per_group;
+        float radius = Radius - index * gap_size;
         glm::mat4 model = glm::mat4(1.0f);
         // 1. translation: displace along circle with 'radius' in range [-offset, offset]
         float angle = (float)i / (float)amount * 360.0f;
@@ -151,11 +159,10 @@ int main()
         glBindVertexArray(0);
     }
 
-    int Group = 8;
+    
     int index = 0;
     auto UpdatePos = [=, &index] {
         glm::mat4 rot = glm::rotate(glm::mat4(1), 0.002f, glm::vec3(0, 1, 0));
-        int nums_per_group = amount/ Group;
         int start = nums_per_group * index;
         int end = std::min((int)amount, start+ nums_per_group);
         for (unsigned int i = start; i < end; i++)
@@ -167,9 +174,12 @@ int main()
 
         glBufferSubData(GL_ARRAY_BUFFER, sizeof(glm::mat4) * start, (end - start) * sizeof(glm::mat4), &modelMatrices[start]);
         glBindBuffer(GL_ARRAY_BUFFER, 0);
-        index = (index+1)%Group;
+        //index = (index+1)%Group;// 只移动最内层
     };
-
+    camera.MovementSpeed = 250;
+    camera.Yaw = -36;
+    camera.Pitch = -26;
+    camera.updateCameraVectors();
     // render loop
     // -----------
     while (!glfwWindowShouldClose(window))
@@ -230,10 +240,53 @@ int main()
     return 0;
 }
 
+int g_last_key_states[GLFW_KEY_LAST] = {0};
+
+void ResetKeyStates() {
+    for (int& state : g_last_key_states) {
+        state = 0;
+    }
+}
+
+bool CheckIsKeyClicked(GLFWwindow* window, int key) {
+    int cur_state = glfwGetKey(window, key);
+    int last_state = g_last_key_states[key];
+    if (cur_state == GLFW_RELEASE) {
+        g_last_key_states[key] = cur_state;
+        if (last_state == GLFW_PRESS) {
+            return true;
+        }
+    }
+    else if (cur_state == GLFW_PRESS) {
+        g_last_key_states[key] = cur_state;
+    }
+    return false;
+}
+
 // process all input: query GLFW whether relevant keys are pressed/released this frame and react accordingly
 // ---------------------------------------------------------------------------------------------------------
 void processInput(GLFWwindow *window)
 {
+    int mode = glfwGetInputMode(window, GLFW_CURSOR);
+    // 普通光标模式不响应其他按键
+    if (mode == GLFW_CURSOR_NORMAL) {
+        return;
+    }
+    
+    // 退出控制
+    if (CheckIsKeyClicked(window, GLFW_KEY_TAB)) {
+        glfwSetInputMode(window, GLFW_CURSOR, GLFW_CURSOR_NORMAL);
+        ResetKeyStates();
+        return;
+    }
+
+    if (CheckIsKeyClicked(window, GLFW_KEY_P)) {
+        auto Position = camera.Position;
+        std::cout << "Debug Info:" << std::endl;
+        std::cout << "camera.Position = " << Position.x << ", " << Position.y << ", " << Position.z << std::endl;
+        std::cout << "camera.eluer_angle Yaw:" << camera.Yaw << " Pitch" << camera.Pitch << std::endl;
+    }
+
     if (glfwGetKey(window, GLFW_KEY_ESCAPE) == GLFW_PRESS)
         glfwSetWindowShouldClose(window, true);
 
@@ -260,6 +313,11 @@ void framebuffer_size_callback(GLFWwindow* window, int width, int height)
 // -------------------------------------------------------
 void mouse_callback(GLFWwindow* window, double xpos, double ypos)
 {
+    int mode = glfwGetInputMode(window, GLFW_CURSOR);
+    if (mode == GLFW_CURSOR_NORMAL) {
+        firstMouse = true; // 重置掉
+        return;
+    }
     if (firstMouse)
     {
         lastX = xpos;
@@ -276,9 +334,34 @@ void mouse_callback(GLFWwindow* window, double xpos, double ypos)
     camera.ProcessMouseMovement(xoffset, yoffset);
 }
 
+void mouse_button_callback(GLFWwindow* window, int button, int action, int mods)
+{
+    if (button == GLFW_MOUSE_BUTTON_LEFT && action == GLFW_PRESS)
+    {
+        // enter game anyway
+        glfwSetInputMode(window, GLFW_CURSOR, GLFW_CURSOR_DISABLED);
+        double xpos, ypos;
+        //getting cursor position
+        glfwGetCursorPos(window, &xpos, &ypos);
+        cout << "Click at " << xpos << " : " << ypos << endl;
+    }
+}
+
 // glfw: whenever the mouse scroll wheel scrolls, this callback is called
 // ----------------------------------------------------------------------
 void scroll_callback(GLFWwindow* window, double xoffset, double yoffset)
 {
-    camera.ProcessMouseScroll(yoffset);
+    int mode = glfwGetInputMode(window, GLFW_CURSOR);
+    // 普通光标模式不响应其他按键
+    if (mode == GLFW_CURSOR_NORMAL) {
+        return;
+    }
+
+    float delta = (camera.MovementSpeed/20);
+    delta = glm::clamp(delta, 1.0f, 100.0f);
+    delta = delta * yoffset;
+    camera.MovementSpeed += delta;
+    camera.MovementSpeed = glm::clamp(camera.MovementSpeed, 2.5f, 500.0f);
+    cout << "camera.MovementSpeed " << camera.MovementSpeed << endl;
+    //camera.ProcessMouseScroll(yoffset);
 }
