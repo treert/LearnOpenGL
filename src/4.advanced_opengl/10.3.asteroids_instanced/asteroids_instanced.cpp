@@ -12,6 +12,7 @@
 #include <learnopengl/model.h>
 
 #include <iostream>
+#include <chrono>
 
 void framebuffer_size_callback(GLFWwindow* window, int width, int height);
 void mouse_callback(GLFWwindow* window, double xpos, double ypos);
@@ -30,9 +31,36 @@ float lastX = (float)SCR_WIDTH / 2.0;
 float lastY = (float)SCR_HEIGHT / 2.0;
 bool firstMouse = true;
 
+// roate group
+int rotate_group = 8;
+int rotate_limit = 1;
+
 // timing
 float deltaTime = 0.0f;
 float lastFrame = 0.0f;
+
+// profiler
+typedef std::chrono::duration<size_t, std::nano> Duration;
+typedef std::chrono::high_resolution_clock::time_point TimePoint;
+constexpr auto now = chrono::high_resolution_clock::now;
+struct FStat {
+    // 无量纲的cost
+    double m_cost = 0;
+    void Update(double cost) {
+        m_cost = m_cost * 0.8 + cost * 0.2;
+    }
+    // 毫秒cost
+    void Update(Duration duration) {
+        auto mms = std::chrono::duration_cast<std::chrono::microseconds>(duration);
+        Update(mms.count()*0.001);
+    }
+};
+
+
+
+FStat g_cpu_cost_per_update_pos;
+FStat g_cpu_cost_bind_sub_data;
+FStat g_total_delta;
 
 int main()
 {
@@ -91,8 +119,7 @@ int main()
     // generate a large list of semi-random model transformation matrices
     // ------------------------------------------------------------------
     unsigned int amount = 100000;
-    int Group = 8;
-    int nums_per_group = amount / Group;
+    int nums_per_group = amount / rotate_group;
     glm::mat4* modelMatrices;
     modelMatrices = new glm::mat4[amount];
     srand(glfwGetTime()); // initialize random seed	
@@ -159,22 +186,23 @@ int main()
         glBindVertexArray(0);
     }
 
-    
-    int index = 0;
-    auto UpdatePos = [=, &index] {
+    auto UpdatePos = [=] {
+        auto tt1 = now();
         glm::mat4 rot = glm::rotate(glm::mat4(1), 0.002f, glm::vec3(0, 1, 0));
-        int start = nums_per_group * index;
-        int end = std::min((int)amount, start+ nums_per_group);
+        int start = 0;
+        int end = std::min((int)amount, 0 + nums_per_group * rotate_limit);
         for (unsigned int i = start; i < end; i++)
         {
             glm::mat4 model = modelMatrices[i];
             modelMatrices[i] = rot * model;
         }
+        auto tt2 = now();
         glBindBuffer(GL_ARRAY_BUFFER, buffer);
-
         glBufferSubData(GL_ARRAY_BUFFER, sizeof(glm::mat4) * start, (end - start) * sizeof(glm::mat4), &modelMatrices[start]);
         glBindBuffer(GL_ARRAY_BUFFER, 0);
-        //index = (index+1)%Group;// 只移动最内层
+        auto tt3 = now();
+        g_cpu_cost_per_update_pos.Update(tt3 - tt1);
+        g_cpu_cost_bind_sub_data.Update(tt3 - tt2);
     };
     camera.MovementSpeed = 250;
     camera.Yaw = -36;
@@ -189,7 +217,7 @@ int main()
         float currentFrame = glfwGetTime();
         deltaTime = currentFrame - lastFrame;
         lastFrame = currentFrame;
-
+        g_total_delta.Update(deltaTime *1000);
         UpdatePos();
 
         // input
@@ -285,6 +313,9 @@ void processInput(GLFWwindow *window)
         std::cout << "Debug Info:" << std::endl;
         std::cout << "camera.Position = " << Position.x << ", " << Position.y << ", " << Position.z << std::endl;
         std::cout << "camera.eluer_angle Yaw:" << camera.Yaw << " Pitch" << camera.Pitch << std::endl;
+        std::cout << "g_cpu_cost_per_update_pos = " << g_cpu_cost_per_update_pos.m_cost << std::endl;
+        std::cout << "g_cpu_cost_bind_sub_data = " << g_cpu_cost_bind_sub_data.m_cost << std::endl;
+        std::cout << "g_total_delta = " << g_total_delta.m_cost << std::endl;
     }
 
     if (glfwGetKey(window, GLFW_KEY_ESCAPE) == GLFW_PRESS)
@@ -298,6 +329,15 @@ void processInput(GLFWwindow *window)
         camera.ProcessKeyboard(LEFT, deltaTime);
     if (glfwGetKey(window, GLFW_KEY_D) == GLFW_PRESS)
         camera.ProcessKeyboard(RIGHT, deltaTime);
+
+    if (CheckIsKeyClicked(window, GLFW_KEY_PAGE_UP)) {
+        rotate_limit++;
+        rotate_limit = glm::min(rotate_limit, rotate_group);
+    }
+    else if (CheckIsKeyClicked(window, GLFW_KEY_PAGE_DOWN)) {
+        rotate_limit--;
+        rotate_limit = glm::max(rotate_limit, 0);
+    }
 }
 
 // glfw: whenever the window size changed (by OS or user resize) this callback function executes
