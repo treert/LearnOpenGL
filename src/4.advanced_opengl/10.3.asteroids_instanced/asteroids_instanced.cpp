@@ -43,6 +43,7 @@ float lastFrame = 0.0f;
 typedef std::chrono::duration<size_t, std::nano> Duration;
 typedef std::chrono::high_resolution_clock::time_point TimePoint;
 constexpr auto now = chrono::high_resolution_clock::now;
+//constexpr auto now = chrono::system_clock::now;
 struct FStat {
     // 无量纲的cost
     double m_cost = 0;
@@ -60,6 +61,7 @@ struct FStat {
 
 FStat g_cpu_cost_per_update_pos;
 FStat g_cpu_cost_bind_sub_data;
+FStat g_render_cost;
 FStat g_total_delta;
 
 int main()
@@ -201,7 +203,7 @@ int main()
         glBufferSubData(GL_ARRAY_BUFFER, sizeof(glm::mat4) * start, (end - start) * sizeof(glm::mat4), &modelMatrices[start]);
         glBindBuffer(GL_ARRAY_BUFFER, 0);
         auto tt3 = now();
-        g_cpu_cost_per_update_pos.Update(tt3 - tt1);
+        g_cpu_cost_per_update_pos.Update(tt2 - tt1);
         g_cpu_cost_bind_sub_data.Update(tt3 - tt2);
     };
     camera.MovementSpeed = 250;
@@ -224,6 +226,7 @@ int main()
         // -----
         processInput(window);
 
+        auto tt1 = now();
         // render
         // ------
         glClearColor(0.1f, 0.1f, 0.1f, 1.0f);
@@ -257,7 +260,8 @@ int main()
             glDrawElementsInstanced(GL_TRIANGLES, rock.meshes[i].indices.size(), GL_UNSIGNED_INT, 0, amount);
             glBindVertexArray(0);
         }
-
+        auto tt2 = now();
+        g_render_cost.Update(tt2-tt1);
         // glfw: swap buffers and poll IO events (keys pressed/released, mouse moved etc.)
         // -------------------------------------------------------------------------------
         glfwSwapBuffers(window);
@@ -313,9 +317,14 @@ void processInput(GLFWwindow *window)
         std::cout << "Debug Info:" << std::endl;
         std::cout << "camera.Position = " << Position.x << ", " << Position.y << ", " << Position.z << std::endl;
         std::cout << "camera.eluer_angle Yaw:" << camera.Yaw << " Pitch" << camera.Pitch << std::endl;
-        std::cout << "g_cpu_cost_per_update_pos = " << g_cpu_cost_per_update_pos.m_cost << std::endl;
-        std::cout << "g_cpu_cost_bind_sub_data = " << g_cpu_cost_bind_sub_data.m_cost << std::endl;
-        std::cout << "g_total_delta = " << g_total_delta.m_cost << std::endl;
+        std::cout << "rotate_limit:" << rotate_limit << std::endl;
+        std::cout << "Profiler:" << std::endl;
+        #define CountCost(Name) std::cout << #Name" = " << Name.m_cost << std::endl;
+        CountCost(g_cpu_cost_per_update_pos);
+        CountCost(g_cpu_cost_bind_sub_data);
+        CountCost(g_render_cost);
+        CountCost(g_total_delta);
+        #undef CountCost
     }
 
     if (glfwGetKey(window, GLFW_KEY_ESCAPE) == GLFW_PRESS)
